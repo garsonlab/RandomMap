@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,85 +6,72 @@ namespace TinyGrid
 {
     public interface INode
     {
-        int2 Position { get; }
+        /// <summary>当前位置</summary>
+        Point Position { get; }
+        /// <summary>格子类型</summary>
         GridType GridType { get; set; }
+        /// <summary>
+        /// 是否在搜索层
+        /// </summary>
+        /// <param name="layer"></param>
+        /// <returns></returns>
         bool InSearchLayer(SearchLayer layer);
+
+        void SetNeighbor(INode other);
     }
+
     public enum GridType
     {
+        /// <summary>空</summary>
         Empty = 0,
+        /// <summary>房间</summary>
         Room = 1,
+        /// <summary>野外点</summary>
         Field = 2,
+        /// <summary>路径点</summary>
         Path = 3,
     }
+
     public enum SearchLayer
     {
+        /// <summary>连接房间和野外只走空</summary>
         ConnectRoomField = 0,
         /// <summary>使用野外和路</summary>
         PathAndField = 1,
         /// <summary>使用野外、路、空</summary>
         PathFieldAndEmpty = 2,
     }
-    [System.Serializable]
-    public class Connector
+
+    public enum Direction
     {
-        public enum ConnectDir
-        {
-            Right = 0,
-            Up = 1,
-            Left = 2,
-            Down = 3
-        }
-
-        public MGrid[] neighbors = new MGrid[4];
-
-        public bool IsConnected(ConnectDir dir)
-        {
-            return neighbors[(int)dir] != null;
-        }
-
-        public void SetBorder(ConnectDir dir, MGrid grid)
-        {
-            neighbors[(int)dir] = grid;
-        }
-
-        public void Clear()
-        {
-            neighbors = new MGrid[4];
-        }
-
-        public override string ToString()
-        {
-            return string.Format("({0},{1},{2},{3})", IsConnected(ConnectDir.Right), IsConnected(ConnectDir.Up), IsConnected(ConnectDir.Left), IsConnected(ConnectDir.Down));
-        }
+        Right = 0,
+        Up = 1,
+        Left = 2,
+        Down = 3
     }
 
     public class MGrid : MonoBehaviour, INode
     {
         [SerializeField]
-        private int2 position;
+        private Point position;
         [SerializeField]
         private GridType gType;
-        public Connector connector;
-        private SpriteRenderer render;
 
-        public int2 Position
-        {
-            get { return position; }
-        }
+        private Dictionary<Direction, INode> dirGrids;
+
+        public Point Position => position;
 
         public GridType GridType
         {
-            get { return gType; }
-            set { gType = value; }
+            get => gType;
+            set => gType = value;
         }
 
-        public void Init(int2 pos)
+        public void Init(Point pos)
         {
-            render = GetComponent<SpriteRenderer>();
-            connector = new Connector();
             position = pos;
-            transform.position = new Vector3(pos.x, pos.y);
+            transform.position = pos;
+            dirGrids = new Dictionary<Direction, INode>();
             Clear();
         }
         
@@ -93,8 +79,8 @@ namespace TinyGrid
         {
             switch (layer)
             {
-                case SearchLayer.PathFieldAndEmpty:
                 case SearchLayer.ConnectRoomField:
+                case SearchLayer.PathFieldAndEmpty:
                     return gType == GridType.Empty || gType == GridType.Path || gType == GridType.Field;
                 case SearchLayer.PathAndField:
                     return gType == GridType.Path || gType == GridType.Field;
@@ -106,44 +92,58 @@ namespace TinyGrid
         public void Clear()
         {
             gType = GridType.Empty;
-            connector.Clear();
-            render.color = new Color(0, 0, 0, 0);
+            dirGrids.Clear();
         }
-        
-        public static void SetBorder(MGrid a, MGrid b)
+
+        public void SetNeighbor(INode other)
         {
-            if(a == null || b == null)
+            if(other == null)
                 return;
 
-            int2 offset = a.position - b.position;
-
+            Point offset = other.Position - position;
             if (offset.AbsLen != 1)
-                throw new Exception(a.position + " is not close to " + b.position);
+                throw new Exception($"{this} Is Not Close To {other}");
+
             if (offset.x > 0)
-            {
-                b.connector.SetBorder(Connector.ConnectDir.Right, a);
-                a.connector.SetBorder(Connector.ConnectDir.Left, b);
-            }
+                dirGrids[Direction.Right] = other;
             else if (offset.y > 0)
-            {
-                b.connector.SetBorder(Connector.ConnectDir.Up, a);
-                a.connector.SetBorder(Connector.ConnectDir.Down, b);
-            }
-            else if (offset.x < 1)
-            {
-                b.connector.SetBorder(Connector.ConnectDir.Left, a);
-                a.connector.SetBorder(Connector.ConnectDir.Right, b);
-            }
+                dirGrids[Direction.Up] = other;
+            else if (offset.x < 0)
+                dirGrids[Direction.Left] = other;
             else if (offset.y < 0)
-            {
-                b.connector.SetBorder(Connector.ConnectDir.Down, a);
-                a.connector.SetBorder(Connector.ConnectDir.Up, b);
-            }
+                dirGrids[Direction.Down] = other;
         }
 
         public override string ToString()
         {
-            return (int)gType + " " + position;
+            return $"{gType}{position}";
+        }
+
+        private void OnDrawGizmos()
+        {
+            Gizmos.color = TinyGenegrater.colors[(int) gType];
+            Gizmos.DrawCube(transform.position, Vector3.one*0.8f);
+
+            Gizmos.color = Color.blue;
+            foreach (var dir in dirGrids)
+            {
+                switch (dir.Key)
+                {
+                    case Direction.Right:
+                        Gizmos.DrawCube(transform.position + new Vector3(0.45f, 0), new Vector3(0.1f, 0.8f, 1));
+                        break;
+                    case Direction.Up:
+                        Gizmos.DrawCube(transform.position + new Vector3(0, 0.45f, 0), new Vector3(0.8f, 0.1f, 1));
+                        break;
+
+                    case Direction.Left:
+                        Gizmos.DrawCube(transform.position - new Vector3(0.45f, 0), new Vector3(0.1f, 0.8f, 1));
+                        break;
+                    case Direction.Down:
+                        Gizmos.DrawCube(transform.position - new Vector3(0, 0.45f, 0), new Vector3(0.8f, 0.1f, 1));
+                        break;
+                }
+            }
         }
 
     }

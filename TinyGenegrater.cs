@@ -8,13 +8,14 @@ namespace TinyGrid
         public int width = 5;
         public int height = 4;
         [Space]
+        public int size = 4;
         public int roomCount = 5;
         public int fieldCount = 8;
         public int roomDensity = 3;
         public int fieldDensity = 3;
-        public int maxChance = 0;
+        public int maxChance = 10;
 
-        public List<Color> colors = new List<Color>()
+        public static readonly List<Color> colors = new List<Color>()
         {
             Color.white,
             Color.red,
@@ -26,30 +27,34 @@ namespace TinyGrid
         private List<MGrid> rooms = new List<MGrid>();
         private List<MGrid> fields = new List<MGrid>();
         private SquareRectFinder finder = new SquareRectFinder();
-
-        public GameObject tiled;
-        private int step = 0;
+        
 
         void Start()
+        {
+            Create();
+        }
+
+        public void Create()
         {
             CreateGrids();
 
             while (true)
             {
-                step = 0;
                 ResetGrids();
                 CreateRooms();
-                PrintTex(step++.ToString());
                 CreateFields();
-                PrintTex(step++.ToString());
                 ConnectRoomField();
 
-                if(ConnectFields())
+                if (ConnectFields())
                     break;
             }
-            
         }
 
+
+        #region Private Methods
+        /// <summary>
+        /// 创建格子
+        /// </summary>
         void CreateGrids()
         {
             grids = new MGrid[width, height];
@@ -58,8 +63,8 @@ namespace TinyGrid
             {
                 for (int j = 0; j < height; j++)
                 {
-                    int2 pos = new int2(i, j);
-                    var obj = GameObject.Instantiate(tiled) as GameObject;
+                    Point pos = new Point(i, j);
+                    var obj = new GameObject(pos.ToString());
                     var grid = obj.AddComponent<MGrid>();
                     grid.Init(pos);
                     grids[i, j] = grid;
@@ -68,6 +73,9 @@ namespace TinyGrid
             finder.UpdateNodes(grids);
         }
         
+        /// <summary>
+        /// 创建房间
+        /// </summary>
         void CreateRooms()
         {
             rooms.Clear();
@@ -80,9 +88,11 @@ namespace TinyGrid
                 grid.GridType = GridType.Room;
                 rooms.Add(grid);
             }
-
         }
 
+        /// <summary>
+        /// 创建中间点
+        /// </summary>
         void CreateFields()
         {
             fields.Clear();
@@ -97,6 +107,9 @@ namespace TinyGrid
             }
         }
 
+        /// <summary>
+        /// 连接房间和中间点
+        /// </summary>
         void ConnectRoomField()
         {
             List<MGrid> fieldFlag = new List<MGrid>();
@@ -126,16 +139,17 @@ namespace TinyGrid
                     {
                         if (node.GridType == GridType.Empty)
                             node.GridType = GridType.Path;
-                        
-                        MGrid.SetBorder((MGrid)pre, (MGrid)node);
+
+                        if (pre != null)
+                        {
+                            node.SetNeighbor(pre);
+                            pre.SetNeighbor(node);
+                        }
                         pre = node;
                     }
 
                     MGrid field = (MGrid) path[0];
                     fieldFlag.Add(field);
-
-
-                    PrintTex(step++.ToString());
                 }
             }
 
@@ -147,10 +161,13 @@ namespace TinyGrid
                 }
             }
 
-            PrintTex(step++.ToString());
             fields = fieldFlag;
         }
 
+        /// <summary>
+        /// 连接中间点
+        /// </summary>
+        /// <returns></returns>
         bool ConnectFields()
         {
             int count = fields.Count;
@@ -158,32 +175,39 @@ namespace TinyGrid
             {
                 for (int j = i + 1; j < count; j++)
                 {
+                    //优先经过已存在道路
                     bool isFound = finder.Search(fields[i], fields[j], SearchLayer.PathAndField);
 
-                    if (!isFound)
+                    if (!isFound)//搜索不到再附带空地，减少多余格子
                         isFound = finder.Search(fields[i], fields[j], SearchLayer.PathFieldAndEmpty);
 
-                    if (!isFound)
+                    if (!isFound)//表示找不到一条不经过Room连接两个野外的道路
                         return false;
                     var path = finder.GetPath();
 
                     INode pre = null;
-                    foreach (var grid in path)
+                    foreach (var node in path)
                     {
-                        if (grid.GridType == GridType.Empty)
-                            grid.GridType = GridType.Path;
+                        if (node.GridType == GridType.Empty)
+                            node.GridType = GridType.Path;
 
                         if (pre != null)
-                            MGrid.SetBorder((MGrid)pre, (MGrid)grid);
-                        pre = grid;
+                        {
+                            node.SetNeighbor(pre);
+                            pre.SetNeighbor(node);
+                        }
+                        pre = node;
                     }
-                    PrintTex(step++.ToString());
+
                 }
             }
 
             return true;
         }
 
+        /// <summary>
+        /// 重置格子
+        /// </summary>
         void ResetGrids()
         {
             for (int i = 0; i < width; i++)
@@ -195,6 +219,12 @@ namespace TinyGrid
             }
         }
 
+        /// <summary>
+        /// 随机一个空格子，与其他的格子保持距离在density以上
+        /// </summary>
+        /// <param name="list">其他格子j</param>
+        /// <param name="density">距离</param>
+        /// <returns></returns>
         MGrid RandomGrid(List<MGrid> list, int density)
         {
             int chance = maxChance;
@@ -246,35 +276,8 @@ namespace TinyGrid
 
             return defGrid;
         }
-
-
-        void PrintTex(string n)
-        {
-            Texture2D texture = new Texture2D(width * 3, height * 3);
-            for (int i = 0; i < width; i++)
-            {
-                for (int j = 0; j < height; j++)
-                {
-                    var grid = grids[i, j];
-                    int x = i * 3 + 1;
-                    int y = ((j+height-1)%height) * 3 + 1;
-
-                    Color c = colors[(int)grid.GridType];
-                    texture.SetPixel(x, y, c);
-                    if (grid.connector.IsConnected(Connector.ConnectDir.Right))
-                        texture.SetPixel(x + 1, y, Color.blue);
-                    if (grid.connector.IsConnected(Connector.ConnectDir.Up))
-                        texture.SetPixel(x, y + 1, Color.blue);
-                    if (grid.connector.IsConnected(Connector.ConnectDir.Left))
-                        texture.SetPixel(x - 1, y, Color.blue);
-                    if (grid.connector.IsConnected(Connector.ConnectDir.Down))
-                        texture.SetPixel(x, y - 1, Color.blue);
-                }
-            }
-
-            byte[] bytes = texture.EncodeToPNG();
-            System.IO.File.WriteAllBytes("F:/cc/" + n + ".png", bytes);
-        }
+        
+        #endregion
 
     }
 }

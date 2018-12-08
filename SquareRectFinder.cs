@@ -16,12 +16,9 @@ namespace TinyGrid
 
     public class PriorityQueue<T>
     {
-        public readonly List<NodeWrap<T>> elements = new List<NodeWrap<T>>();
+        private readonly List<NodeWrap<T>> elements = new List<NodeWrap<T>>();
 
-        public int Count
-        {
-            get { return elements.Count; }
-        }
+        public int Count => elements.Count;
 
         public void Enqueue(T node, int priority)
         {
@@ -58,7 +55,7 @@ namespace TinyGrid
         private PriorityQueue<INode> frontier = new PriorityQueue<INode>();
         private Dictionary<INode, INode> cameFrom = new Dictionary<INode, INode>();
         private Dictionary<INode, int> cost = new Dictionary<INode, int>();
-        private List<int2> dirs = new List<int2>() { int2.right, int2.up, int2.left, int2.down };
+        private List<Point> dirs = new List<Point>() { Point.right, Point.up, Point.left, Point.down };
         private List<INode> path = new List<INode>();
 
         public void UpdateNodes(INode[,] nodes)
@@ -68,23 +65,12 @@ namespace TinyGrid
             this.nodes = nodes;
         }
         
-        public bool Contains(int2 pos)
-        {
-            return pos.x >= 0 && pos.x < width && pos.y >= 0 && pos.y < height;
-        }
+        public bool Contains(Point pos) => pos.x >= 0 && pos.x < width && pos.y >= 0 && pos.y < height;
 
-        public INode GetNode(int2 pos)
-        {
-            if (Contains(pos))
-                return nodes[pos.x, pos.y];
-            return null;
-        }
-        
-        public List<INode> GetPath()
-        {
-            return path;
-        }
-        
+        public INode GetNode(Point pos) => Contains(pos) ? nodes[pos.x, pos.y] : null;
+
+        public List<INode> GetPath() => path;
+
         public bool Search(INode start, INode goal, SearchLayer layer)
         {
             cameFrom.Clear();
@@ -105,17 +91,16 @@ namespace TinyGrid
                     break;
                 }
 
-                foreach (var nerghbor in GetNeighbors(current, layer))
+                foreach (var neighbor in GetNeighbors(current, layer))
                 {
                     int newCost = cost[current] + 1;//所有的代价都为1
-                    int nearCost;
-                    if (!cost.TryGetValue(nerghbor, out nearCost) || newCost < nearCost)
+                    if (!cost.TryGetValue(neighbor, out int nearCost) || newCost < nearCost)
                     {
-                        cost[nerghbor] = nearCost;
+                        cost[neighbor] = nearCost;
 
-                        int priority = newCost + (nerghbor.Position - goal.Position).AbsLen;
-                        frontier.Enqueue(nerghbor, priority);
-                        cameFrom[nerghbor] = current;
+                        int priority = newCost + (neighbor.Position - goal.Position).AbsLen;
+                        frontier.Enqueue(neighbor, priority);
+                        cameFrom[neighbor] = current;
                     }
                 }
             }
@@ -141,7 +126,7 @@ namespace TinyGrid
             //随机方向？
             foreach (var dir in dirs)
             {
-                int2 pos = current.Position + dir;
+                Point pos = current.Position + dir;
                 var grid = GetNode(pos);
                 if (grid != null && grid.InSearchLayer(layer))
                     yield return grid;

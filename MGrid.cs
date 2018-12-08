@@ -57,6 +57,7 @@ namespace TinyGrid
         [SerializeField]
         private GridType gType;
 
+        private int[,] map;
         private Dictionary<Direction, INode> dirGrids;
 
         public Point Position => position;
@@ -112,6 +113,12 @@ namespace TinyGrid
                 dirGrids[Direction.Left] = other;
             else if (offset.y < 0)
                 dirGrids[Direction.Down] = other;
+        }
+
+        public void Split(int size)
+        {
+            map = new int[size, size];
+
         }
 
         public override string ToString()
